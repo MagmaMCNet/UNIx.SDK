@@ -160,22 +160,28 @@ namespace UNIx.SDK
         public static class Protocol
         {
             public const int HeaderSize = 5;
-            public static byte[] PackBytes(MessageType type, byte[] payload, byte[] key = null)
+            public static byte[] RawPackBytes(byte type, byte[] payload, byte[] key = null)
             {
                 var compressedPayload = Compress(payload);
                 var length = BitConverter.GetBytes(compressedPayload.Length);
                 var buffer = new byte[HeaderSize + compressedPayload.Length];
 
-                buffer[0] = (byte)type;
+                buffer[0] = type;
                 Array.Copy(length, 0, buffer, 1, 4);
                 Array.Copy(compressedPayload, 0, buffer, 5, compressedPayload.Length);
 
                 return EncryptDecrypt(buffer, key ?? KeyBytes);
             }
-            public static byte[] Pack(MessageType type, string message, byte[] key = null) =>
-                PackBytes(type, Encoding.UTF8.GetBytes(message), key);
+            public static byte[] PackBytes(MessageType type, byte[] payload, byte[] key = null) =>
+                RawPackBytes((byte)type, payload, key);
 
-            public static (MessageType type, string message)? Unpack(byte[] buffer, int bytesRead, byte[] key = null)
+            public static byte[] Pack(MessageType type, string message, byte[] key = null) =>
+                RawPackBytes((byte)type, Encoding.UTF8.GetBytes(message), key);
+
+            public static byte[] RawPack(byte type, string message, byte[] key = null) =>
+                RawPackBytes(type, Encoding.UTF8.GetBytes(message), key);
+
+            public static (byte type, string message)? RawUnpack(byte[] buffer, int bytesRead, byte[] key = null)
             {
                 if (buffer == null || buffer.Length == 0 || bytesRead <= 0)
                     return null;
@@ -191,9 +197,7 @@ namespace UNIx.SDK
                 var typeByte = decrypted[0];
                 if (!Enum.IsDefined(typeof(MessageType), typeByte))
                     return null;
-
-                var type = (MessageType)typeByte;
-
+                
                 int length = BitConverter.ToInt32(decrypted, 1);
                 if (length < 0 || length > 1_000_000) // max 1MB
                     return null;
@@ -208,9 +212,11 @@ namespace UNIx.SDK
                 if (decompressed == null)
                     return null;
 
-                return (type, Encoding.UTF8.GetString(decompressed));
+                return (typeByte, Encoding.UTF8.GetString(decompressed));
             }
-            public static (MessageType type, byte[] message)? UnpackBytes(byte[] buffer, int bytesRead, byte[] key = null)
+            public static (MessageType type, string message)? Unpack(byte[] buffer, int bytesRead, byte[] key = null) =>
+                ((MessageType type, string message)?)RawUnpack(buffer, bytesRead, key);
+            public static (byte type, byte[] message)? RawUnpackBytes(byte[] buffer, int bytesRead, byte[] key = null)
             {
                 if (buffer == null || buffer.Length == 0 || bytesRead <= 0)
                     return null;
@@ -227,10 +233,8 @@ namespace UNIx.SDK
                 if (!Enum.IsDefined(typeof(MessageType), typeByte))
                     return null;
 
-                var type = (MessageType)typeByte;
-
                 int length = BitConverter.ToInt32(decrypted, 1);
-                if (length < 0 || length > 1_000_000) 
+                if (length < 0 || length > 1_000_000)
                     return null;
 
                 if (decrypted.Length < HeaderSize + length)
@@ -243,8 +247,10 @@ namespace UNIx.SDK
                 if (decompressed == null)
                     return null;
 
-                return (type, decompressed);
+                return (typeByte, decompressed);
             }
+            public static (MessageType type, byte[] message)? UnpackBytes(byte[] buffer, int bytesRead, byte[] key = null) =>
+                ((MessageType type, byte[] message)?)RawUnpackBytes(buffer, bytesRead, key);
 
             private static byte[] Compress(byte[] data)
             {
@@ -369,7 +375,7 @@ namespace UNIx.SDK
         public static void LogDebug(string message) => Log(LogLevel.Debug, message);
         public static void LogTrace(string message) => Log(LogLevel.Trace, message);
 
-        public static class SystemInformationn
+        public static class SystemInformation
         {
             private static readonly string DllPath = Path.Combine(Path.GetTempPath(), "UNIxNative.dll");
             private static IntPtr hModule;
@@ -382,10 +388,7 @@ namespace UNIx.SDK
 
             [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
             private delegate IntPtr GetStringDelegate();
-            [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-            private delegate void InitializeDelegate();
 
-            private static readonly InitializeDelegate _initialize;
 
             private static readonly GetStringDelegate _biosVendor;
             private static readonly GetStringDelegate _biosVersion;
@@ -499,7 +502,7 @@ namespace UNIx.SDK
                 get;
             }
 
-            static SystemInformationn()
+            static SystemInformation()
             {
                 if (!File.Exists(DllPath))
                     File.WriteAllBytes(DllPath, Resources.UNIxNative);
