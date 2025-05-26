@@ -195,8 +195,6 @@ namespace UNIx.SDK
                     return null;
 
                 var typeByte = decrypted[0];
-                if (!Enum.IsDefined(typeof(MessageType), typeByte))
-                    return null;
                 
                 int length = BitConverter.ToInt32(decrypted, 1);
                 if (length < 0 || length > 1_000_000) // max 1MB
@@ -230,8 +228,6 @@ namespace UNIx.SDK
                     return null;
 
                 var typeByte = decrypted[0];
-                if (!Enum.IsDefined(typeof(MessageType), typeByte))
-                    return null;
 
                 int length = BitConverter.ToInt32(decrypted, 1);
                 if (length < 0 || length > 1_000_000)
